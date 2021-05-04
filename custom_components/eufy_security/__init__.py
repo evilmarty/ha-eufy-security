@@ -14,6 +14,9 @@ from homeassistant.helpers.event import async_track_time_interval
 
 from .config_flow import configured_instances
 from .const import DATA_API, DATA_LISTENER, DOMAIN
+from .station import Station
+from .camera import EufySecurityCam
+from .sensor import BinarySensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +63,7 @@ async def async_setup(hass, config):
     return True
 
 
-async def async_setup_entry(hass, config_entry):
+async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up Eufy Security as a config entry."""
     session = aiohttp_client.async_get_clientsession(hass)
 
@@ -77,8 +80,17 @@ async def async_setup_entry(hass, config_entry):
 
     hass.data[DOMAIN][DATA_API][config_entry.entry_id] = api
 
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setup(config_entry, "camera")
+    async_add_entities(
+        [Station(hass, station) for station in api.stations.values()],
+        True
+    )
+    async_add_entities(
+        [EufySecurityCam(hass, camera) for camera in api.cameras.values()],
+        True
+    )
+    async_add_entities(
+        [BinarySensor(hass, camera) for camera in api.cameras.values()],
+        True
     )
 
     async def refresh(event_time):
@@ -98,7 +110,5 @@ async def async_unload_entry(hass, config_entry):
     hass.data[DOMAIN][DATA_API].pop(config_entry.entry_id)
     cancel = hass.data[DOMAIN][DATA_LISTENER].pop(config_entry.entry_id)
     cancel()
-
-    await hass.config_entries.async_forward_entry_unload(config_entry, "camera")
 
     return True

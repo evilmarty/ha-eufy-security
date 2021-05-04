@@ -1,7 +1,6 @@
 """Define support for Eufy Security cameras/doorbells."""
 import asyncio
 import logging
-from enum import Enum
 
 from eufy_security.errors import EufySecurityError
 from haffmpeg.camera import CameraMjpeg
@@ -9,27 +8,14 @@ from haffmpeg.tools import ImageFrame, IMAGE_JPEG
 
 from homeassistant.components.camera import SUPPORT_ON_OFF, SUPPORT_STREAM, Camera
 from homeassistant.components.ffmpeg import DATA_FFMPEG
-from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.helpers.aiohttp_client import async_aiohttp_proxy_stream
 
-from .const import DATA_API, DOMAIN
+from .const import DOMAIN, MANUFACTURER
+
 
 _LOGGER = logging.getLogger(__name__)
 
-ATTR_HARDWARE_VERSION = "hardware_version"
-ATTR_SERIAL = "serial_number"
-ATTR_SOFTWARE_VERSION = "software_version"
-
-DEFAULT_ATTRIBUTION = "Data provided by Eufy Security"
 DEFAULT_FFMPEG_ARGUMENTS = "-pred 1"
-
-
-async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up Eufy Security sensors based on a config entry."""
-    api = hass.data[DOMAIN][DATA_API][entry.entry_id]
-    async_add_entities(
-        [EufySecurityCam(hass, camera) for camera in api.cameras.values()], True
-    )
 
 
 class EufySecurityCam(Camera):
@@ -50,24 +36,21 @@ class EufySecurityCam(Camera):
         self._stream_url = None
 
     @property
-    def brand(self):
-        """Return the camera brand."""
-        return "Eufy Security"
-
-    @property
-    def device_state_attributes(self):
-        """Return the state attributes."""
+    def device_info(self):
         return {
-            ATTR_ATTRIBUTION: DEFAULT_ATTRIBUTION,
-            ATTR_HARDWARE_VERSION: self._camera.hardware_version,
-            ATTR_SERIAL: self._camera.serial,
-            ATTR_SOFTWARE_VERSION: self._camera.software_version,
+            "identifiers": {(DOMAIN, self.unique_id)},
+            "name": self.name,
+            "manufacturer": MANUFACTURER,
+            "model": self._camera.model,
+            "sw_version": self._camera.software_version,
         }
 
     @property
-    def model(self):
-        """Return the name of this camera."""
-        return self._camera.model
+    def extra_state_attributes(self):
+        """Return the state attributes."""
+        return {
+            param.name.lower(): value for param, value in self._camera.params.items()
+        }
 
     @property
     def name(self):
@@ -149,3 +132,7 @@ class EufySecurityCam(Camera):
             )
         finally:
             await self._ffmpeg_stream.close()
+
+    async def stream_source(self):
+        self._stream_url = await self._camera.async_start_stream()
+        return self._stream_url

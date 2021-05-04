@@ -4,12 +4,13 @@
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/eufy_security",
   "requirements": [
-    "python-eufy-security==0.3.1"
+    "git+http://github.com/evilmarty/python-eufy-security.git@dev"
   ],
   "dependencies": [
     "ffmpeg"
   ],
   "codeowners": [
-      "@nonsleepr"
+      "@nonsleepr",
+      "@evilmarty"
   ]
 }
