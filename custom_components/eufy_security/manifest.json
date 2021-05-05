@@ -12,5 +12,6 @@
   "codeowners": [
       "@nonsleepr",
       "@evilmarty"
-  ]
+  ],
+  "version": "0.4.0"
 }
