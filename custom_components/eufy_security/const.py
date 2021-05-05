@@ -1,5 +1,6 @@
 """Define Eufy Security constants."""
 DOMAIN = "eufy_security"
+PLATFORMS = ["binary_sensor", "camera", "station"]
 MANUFACTURER = "Eufy Security"
 
 DATA_API = "api"

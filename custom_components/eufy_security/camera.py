@@ -10,7 +10,8 @@ from homeassistant.components.camera import SUPPORT_ON_OFF, SUPPORT_STREAM, Came
 from homeassistant.components.ffmpeg import DATA_FFMPEG
 from homeassistant.helpers.aiohttp_client import async_aiohttp_proxy_stream
 
-from .const import DOMAIN, MANUFACTURER
+from .device import Device
+from .const import DOMAIN, DATA_API
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -18,15 +19,23 @@ _LOGGER = logging.getLogger(__name__)
 DEFAULT_FFMPEG_ARGUMENTS = "-pred 1"
 
 
-class EufySecurityCam(Camera):
+async def async_setup_entry(hass, entry, async_add_entities):
+    api = hass.data[DOMAIN][DATA_API]
+    async_add_entities(
+        EufySecurityCam(hass, camera)
+        for camera in api.cameras.values()
+    )
+
+
+class EufySecurityCam(Device, Camera):
     """Define a Eufy Security camera/doorbell."""
 
     def __init__(self, hass, camera):
         """Initialize."""
-        super().__init__()
+        super().__init__(hass, camera)
+        Camera.__init__()
 
         self._async_unsub_dispatcher_connect = None
-        self._camera = camera
         self._ffmpeg = hass.data[DATA_FFMPEG]
         self._ffmpeg_arguments = DEFAULT_FFMPEG_ARGUMENTS
         self._ffmpeg_image_frame = ImageFrame(self._ffmpeg.binary)
@@ -36,81 +45,54 @@ class EufySecurityCam(Camera):
         self._stream_url = None
 
     @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.unique_id)},
-            "name": self.name,
-            "manufacturer": MANUFACTURER,
-            "model": self._camera.model,
-            "sw_version": self._camera.software_version,
-        }
-
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes."""
-        return {
-            param.name.lower(): value for param, value in self._camera.params.items()
-        }
-
-    @property
-    def name(self):
-        """Return the name of this camera."""
-        return self._camera.name
-
-    @property
-    def should_poll(self):
-        """Return False, updates are controlled via the hub."""
-        return False
-
-    @property
     def supported_features(self):
         """Return supported features."""
         return SUPPORT_ON_OFF | SUPPORT_STREAM
 
     @property
-    def unique_id(self):
-        """Return a unique ID."""
-        return self._camera.serial
+    def motion_detection_enabled(self):
+        """Return the camera motion detection status."""
+        return self._device.motion_detection_enabled
 
     async def async_camera_image(self):
         """Return a still image response from the camera."""
-        if self._last_image_url != self._camera.last_camera_image_url:
+        if self._last_image_url != self._device.last_camera_image_url:
             self._last_image = await asyncio.shield(
                 self._ffmpeg_image_frame.get_image(
-                    self._camera.last_camera_image_url,
+                    self._device.last_camera_image_url,
                     output_format=IMAGE_JPEG,
                     extra_cmd=self._ffmpeg_arguments,
                 )
             )
-            self._last_image_url = self._camera.last_camera_image_url
+            self._last_image_url = self._device.last_camera_image_url
 
         return self._last_image
 
     async def async_disable_motion_detection(self):
         """Disable doorbell's motion detection"""
-        await self._camera.async_stop_detection()
+        await self._device.async_stop_detection()
 
     async def async_enable_motion_detection(self):
         """Enable doorbell's motion detection"""
-        await self._camera.async_start_detection()
+        await self._device.async_start_detection()
 
     async def async_turn_off(self):
         """Turn off the RTSP stream."""
         try:
-            await self._camera.async_stop_stream()
-            _LOGGER.info("Stream stopped for %s", self._camera.name)
+            await self._device.async_stop_stream()
+            _LOGGER.info("Stream stopped for %s", self._device.name)
         except EufySecurityError as err:
-            _LOGGER.error("Unable to stop stream (%s): %s", self._camera.name, err)
+            _LOGGER.error("Unable to stop stream (%s): %s", self._device.name, err)
 
         self._stream_url = None
 
     async def async_turn_on(self):
         """Turn on the RTSP stream."""
         try:
-            self._stream_url = await self._camera.async_start_stream()
-            _LOGGER.info("Stream started (%s): %s", self._camera.name, self._stream_url)
+            self._stream_url = await self._device.async_start_stream()
+            _LOGGER.info("Stream started (%s): %s", self._device.name, self._stream_url)
         except EufySecurityError as err:
-            _LOGGER.error("Unable to start stream (%s): %s", self._camera.name, err)
+            _LOGGER.error("Unable to start stream (%s): %s", self._device.name, err)
 
     async def handle_async_mjpeg_stream(self, request):
         """Generate an HTTP MJPEG stream from the camera."""
@@ -134,5 +116,5 @@ class EufySecurityCam(Camera):
             await self._ffmpeg_stream.close()
 
     async def stream_source(self):
-        self._stream_url = await self._camera.async_start_stream()
+        self._stream_url = await self._device.async_start_stream()
         return self._stream_url

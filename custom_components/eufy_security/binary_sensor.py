@@ -1,7 +1,7 @@
 """Define support for Eufy sensors."""
 import logging
 
-from eufy_security.types import ParamType, DeviceType
+from eufy_security.types import DeviceType
 
 from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
@@ -9,56 +9,33 @@ from homeassistant.components.binary_sensor import (
     DEVICE_CLASS_MOTION,
 )
 
-from .const import DOMAIN, MANUFACTURER
+from .device import Device
+from .const import DOMAIN, DATA_API
 
 
 _LOGGER = logging.getLogger(__name__)
 
-class BinarySensor(BinarySensorEntity):
+
+async def async_setup_entry(hass, entry, async_add_entities):
+    api = hass.data[DOMAIN][DATA_API]
+    async_add_entities(
+        BinarySensor(hass, sensor)
+        for sensor in api.sensors.values()
+    )
+
+
+class BinarySensor(Device, BinarySensorEntity):
     """Define a Eufy sensor."""
 
-    def __init__(self, hass, sensor):
+    def __init__(self, hass, device):
         """Initialize."""
-        super().__init__()
-
-        self._sensor = sensor
-
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, self.unique_id)},
-            "name": self.name,
-            "manufacturer": MANUFACTURER,
-            "model": self._sensor.model,
-            "sw_version": self._sensor.software_version,
-        }
-
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes."""
-        return {
-            param.name.lower(): value for param, value in self._sensor.params.items() if param != ParamType.SENSOR_OPEN
-        }
-
-    @property
-    def name(self):
-        """Return the name of this sensor."""
-        return self._sensor.name
-
-    @property
-    def should_poll(self):
-        """Return False, updates are controlled via the hub."""
-        return False
-
-    @property
-    def unique_id(self):
-        """Return a unique ID."""
-        return self._sensor.serial
+        super().__init__(hass, device)
+        BinarySensorEntity.__init__()
 
     @property
     def is_on(self):
         """Return the status of the sensor."""
-        return self._sensor.params[Param.SENSOR_OPEN] == 1
+        return self._sensor.is_on
 
     @property
     def device_class(self):

@@ -1,5 +1,6 @@
 """Define support for Eufy Security devices."""
 from datetime import timedelta
+import asyncio
 import logging
 
 from eufy_security import async_login
@@ -63,13 +64,13 @@ async def async_setup(hass, config):
     return True
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(hass, entry):
     """Set up Eufy Security as a config entry."""
     session = aiohttp_client.async_get_clientsession(hass)
 
     try:
         api = await async_login(
-            config_entry.data[CONF_USERNAME], config_entry.data[CONF_PASSWORD], session
+            entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD], session
         )
     except InvalidCredentialsError:
         _LOGGER.error("Invalid username and/or password")
@@ -78,37 +79,38 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         _LOGGER.error("Config entry failed: %s", err)
         raise ConfigEntryNotReady
 
-    hass.data[DOMAIN][DATA_API][config_entry.entry_id] = api
-
-    async_add_entities(
-        [Station(hass, station) for station in api.stations.values()],
-        True
-    )
-    async_add_entities(
-        [EufySecurityCam(hass, camera) for camera in api.cameras.values()],
-        True
-    )
-    async_add_entities(
-        [BinarySensor(hass, camera) for camera in api.cameras.values()],
-        True
-    )
-
     async def refresh(event_time):
         """Refresh data from the API."""
         _LOGGER.debug("Refreshing API data")
         await api.async_update_device_info()
 
-    hass.data[DOMAIN][DATA_LISTENER][config_entry.entry_id] = async_track_time_interval(
-        hass, refresh, DEFAULT_SCAN_INTERVAL
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = {
+        DATA_API: api,
+        DATA_LISTENER: async_track_time_interval(hass, refresh, DEFAULT_SCAN_INTERVAL),
+    }
+
+    for platform in PLATFORMS:
+        hass.async_create_task(
+            hass.config_entries.async_forward_entry_setup(entry, platform)
+        )
+
+    return True
+
+
+async def async_unload_entry(hass, entry):
+    """Unload a Eufy Security config entry."""
+    unload_ok = all(
+        await asyncio.gather(
+            *[
+                hass.config_entries.async_forward_entry_unload(entry, platform)
+                for platform in PLATFORMS
+            ]
+        )
     )
 
-    return True
+    if unload_ok:
+        entry_data = hass.data[DOMAIN].pop(entry.entry_id)
+        entry_data[DATA_LISTENER]()
 
-
-async def async_unload_entry(hass, config_entry):
-    """Unload a Eufy Security config entry."""
-    hass.data[DOMAIN][DATA_API].pop(config_entry.entry_id)
-    cancel = hass.data[DOMAIN][DATA_LISTENER].pop(config_entry.entry_id)
-    cancel()
-
-    return True
+    return unload_ok
