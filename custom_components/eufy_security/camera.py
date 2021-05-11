@@ -10,8 +10,8 @@ from homeassistant.components.camera import SUPPORT_ON_OFF, SUPPORT_STREAM, Came
 from homeassistant.components.ffmpeg import DATA_FFMPEG
 from homeassistant.helpers.aiohttp_client import async_aiohttp_proxy_stream
 
-from .device import Device
-from .const import DOMAIN, DATA_API
+from .const import DOMAIN, DATA_API, DATA_COORDINATOR
+from .device import DeviceEntity
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,26 +20,28 @@ DEFAULT_FFMPEG_ARGUMENTS = "-pred 1"
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    api = hass.data[DOMAIN][DATA_API]
+    ffmpeg = hass.data[DATA_FFMPEG]
+    api = hass.data[DOMAIN][entry.entry_id][DATA_API]
+    coordinator = hass.data[DOMAIN][entry.entry_id][DATA_COORDINATOR]
     async_add_entities(
-        EufySecurityCam(hass, camera)
+        EufySecurityCam(ffmpeg, camera, coordinator)
         for camera in api.cameras.values()
     )
 
 
-class EufySecurityCam(Device, Camera):
+class EufySecurityCam(DeviceEntity, Camera):
     """Define a Eufy Security camera/doorbell."""
 
-    def __init__(self, hass, camera):
+    def __init__(self, ffmpeg, device, coordinator):
         """Initialize."""
-        super().__init__(hass, camera)
-        Camera.__init__()
+        super().__init__(device, coordinator)
+        Camera.__init__(self)
 
         self._async_unsub_dispatcher_connect = None
-        self._ffmpeg = hass.data[DATA_FFMPEG]
+        self._ffmpeg = ffmpeg
         self._ffmpeg_arguments = DEFAULT_FFMPEG_ARGUMENTS
-        self._ffmpeg_image_frame = ImageFrame(self._ffmpeg.binary)
-        self._ffmpeg_stream = CameraMjpeg(self._ffmpeg.binary)
+        self._ffmpeg_image_frame = ImageFrame(ffmpeg.binary)
+        self._ffmpeg_stream = CameraMjpeg(ffmpeg.binary)
         self._last_image = None
         self._last_image_url = None
         self._stream_url = None
@@ -52,7 +54,7 @@ class EufySecurityCam(Device, Camera):
     @property
     def motion_detection_enabled(self):
         """Return the camera motion detection status."""
-        return self._device.motion_detection_enabled
+        return self._device.params['CAMERA_PIR']
 
     async def async_camera_image(self):
         """Return a still image response from the camera."""
@@ -70,11 +72,11 @@ class EufySecurityCam(Device, Camera):
 
     async def async_disable_motion_detection(self):
         """Disable doorbell's motion detection"""
-        await self._device.async_stop_detection()
+        await self._device.async_update_param('DETECT_SWITCH', False)
 
     async def async_enable_motion_detection(self):
         """Enable doorbell's motion detection"""
-        await self._device.async_start_detection()
+        await self._device.async_update_param('DETECT_SWITCH', True)
 
     async def async_turn_off(self):
         """Turn off the RTSP stream."""

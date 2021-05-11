@@ -8,16 +8,13 @@ from eufy_security.errors import EufySecurityError, InvalidCredentialsError
 import voluptuous as vol
 
 from homeassistant.config_entries import SOURCE_IMPORT
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, CONF_SCAN_INTERVAL
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import aiohttp_client, config_validation as cv
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .config_flow import configured_instances
-from .const import DATA_API, DATA_LISTENER, DOMAIN
-from .station import Station
-from .camera import EufySecurityCam
-from .sensor import BinarySensor
+from .const import DATA_API, DATA_LISTENER, DATA_COORDINATOR, DOMAIN, PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,34 +33,6 @@ CONFIG_SCHEMA = vol.Schema(
 )
 
 
-async def async_setup(hass, config):
-    """Set up the Eufy Security component."""
-    hass.data[DOMAIN] = {}
-    hass.data[DOMAIN][DATA_API] = {}
-    hass.data[DOMAIN][DATA_LISTENER] = {}
-
-    if DOMAIN not in config:
-        return True
-
-    conf = config[DOMAIN]
-
-    if conf[CONF_USERNAME] in configured_instances(hass):
-        return True
-
-    hass.async_create_task(
-        hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": SOURCE_IMPORT},
-            data={
-                CONF_USERNAME: conf[CONF_USERNAME],
-                CONF_PASSWORD: conf[CONF_PASSWORD],
-            },
-        )
-    )
-
-    return True
-
-
 async def async_setup_entry(hass, entry):
     """Set up Eufy Security as a config entry."""
     session = aiohttp_client.async_get_clientsession(hass)
@@ -79,15 +48,16 @@ async def async_setup_entry(hass, entry):
         _LOGGER.error("Config entry failed: %s", err)
         raise ConfigEntryNotReady
 
-    async def refresh(event_time):
-        """Refresh data from the API."""
-        _LOGGER.debug("Refreshing API data")
-        await api.async_update_device_info()
-
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         DATA_API: api,
-        DATA_LISTENER: async_track_time_interval(hass, refresh, DEFAULT_SCAN_INTERVAL),
+        DATA_COORDINATOR: DataUpdateCoordinator(
+            hass,
+            _LOGGER,
+            name=f"api_{entry.entry_id}",
+            update_method=api.async_update_device_info,
+            update_interval=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        ),
     }
 
     for platform in PLATFORMS:
@@ -110,7 +80,6 @@ async def async_unload_entry(hass, entry):
     )
 
     if unload_ok:
-        entry_data = hass.data[DOMAIN].pop(entry.entry_id)
-        entry_data[DATA_LISTENER]()
+        hass.data[DOMAIN].pop(entry.entry_id)
 
     return unload_ok

@@ -4,7 +4,7 @@
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/eufy_security",
   "requirements": [
-    "git+http://github.com/evilmarty/python-eufy-security.git@dev"
+    "git+https://github.com/evilmarty/python-eufy-security.git@dev#python-eufy-security==0.4.0"
   ],
   "dependencies": [
     "ffmpeg"
@@ -13,5 +13,6 @@
       "@nonsleepr",
       "@evilmarty"
   ],
+  "iot_class": "cloud_polling",
   "version": "0.4.0"
 }
