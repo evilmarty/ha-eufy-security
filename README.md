@@ -1,5 +1,7 @@
 # Eufy Security integration for Home Assistant
 
+**Update** This is a fork off of [@nonsleepr](https://github.com/nonsleepr/ha-eufy-security)'s implemenation. It adds more supported devices and includes more information about each device. This is in part because of a fork of [@FuzzyMistborn](https://github.com/FuzzyMistborn/python-eufy-security) and [@keshavdv](https://github.com/keshavdv/python-eufy-security)'s library.
+
 At this moment, this repo simply extracts [@bachya](https://github.com/bachya)'s [PR for Home Assistant](https://github.com/home-assistant/home-assistant/pull/28443) which uses [@FuzzyMistborn](https://github.com/FuzzyMistborn)'s package [`python-eufy-security`](https://github.com/FuzzyMistborn/python-eufy-security).
 
 ## Installation
@@ -14,7 +16,7 @@ At this moment, this repo simply extracts [@bachya](https://github.com/bachya)'s
 
 ### Manual
 
-1. Download and unzip the [repo archive](https://github.com/nonsleepr/ha-eufy-security/archive/master.zip). (You could also click "Download ZIP" after pressing the green button in the repo, alternatively, you could clone the repo from SSH add-on).
+1. Download and unzip the [repo archive](https://github.com/evilmarty/ha-eufy-security/archive/master.zip). (You could also click "Download ZIP" after pressing the green button in the repo, alternatively, you could clone the repo from SSH add-on).
 2. Copy contents of the archive/repo into your `/config` directory.
 3. Restart your Home Assistant.
 4. Add "Eufy Security" integration in Home Assistant's "Configuration -> Integrations" tab.
